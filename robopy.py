@@ -1,12 +1,12 @@
 #!/usr/bin/env pybricks-micropython
-from pybricks.hubs import EV3Brick
-import pybricks.ev3devices as dev # Motor, TouchSensor, ColorSensor, InfraredSensor, UltrasonicSensor, GyroSensor
-from pybricks.parameters import Port, Stop
-from pybricks.tools import wait
-from pybricks.media.ev3dev import Font
+from spike import hub
+from spike import motor as spike_motor
+from spike import color_sensor as spike_color_sensor
+from spike import time
+from hub import port
+
 
 import math
-from time import sleep
 from json import load, dump
 
 # TODO: Check the motor backlash after holding them
@@ -17,23 +17,22 @@ Drive = 0
 Right = 1
 Left = -1
 
-big_font = Font(size= 20, bold= True)
 
-def wait_for_button(ev3):
-    while not ev3.buttons.pressed():
-        wait(10)
-    while ev3.buttons.pressed():
-        wait(10)
+def wait_for_button(hub):
+    while not hub.button.pressed():
+        sleep_ms(10)
+    while hub.button.pressed():
+        sleep_ms(10)
 
-def black_lf_eval(target, sensor):
-    reflection = sensor.reflection()
+def black_lf_eval(target, port):
+    reflection = spike_color_sensor.reflection(port)
     error = target - reflection
     return error
 
 
 class Motor:
     def __init__(self, motor_port, motor_type= Drive, wheel_diameter= 0, ratio= 1):
-        self.motor = dev.Motor(motor_port)
+        self.port = motor_port
         self.type = motor_type
         self.log_mode = True
         self.total_dist = 0
@@ -47,6 +46,9 @@ class Motor:
         self.circ = math.pi * self.diameter
         self.ratio = ratio
 
+    def _run_for_deg(self, angle, speed, stop):
+        spike_motor.run_for_degrees(self.port, angle, speed, stop= stop)
+
     def run(self, dist, speed, wait= False):
         angle = dist / self.circ * 360
         angle /= self.ratio
@@ -55,26 +57,29 @@ class Motor:
         if self.log_mode:
             self.total_dist += dist
 
-        self.motor.run_angle(speed, angle, wait= wait, then= Stop.HOLD)
+        if wait:
+            self._run_for_degrees(angle, speed, stop= HOLD)
+        else:
+            threading.Thread(target= self._run_for_deg, args= (angle, speed, spike_motor.HOLD)).start()
 
     def run_free(self, speed):
-        self.motor.run(speed)
+        spike_motor.run(self.port, speed)
 
     def free(self):
-        self.motor.reset_angle(0)
-        self.motor.stop()
+        spike_motor.reset_relative_position(self.port, 0)
+        spike_motor.run(self.port, stop= spike_motor.COAST)
 
     def lock(self):
-        self.motor.hold()
+       spike_motor.stop(self.port, stop= spike_motor.HOLD)
 
     def reset_angle(self):
-        self.motor.reset_angle(0)
+        spike_motor.reset_relative_position(self.port, 0)
 
     def get_movement(self):
-        return self.motor.angle() * self.circ / 360 * self.ratio / self.friction
+        return spike_motor.relative_position(self.port) * self.circ / 360 * self.ratio / self.friction
 
 class DriveBase:
-    def __init__(self, left_motor : Motor, right_motor : Motor, axle_len : int, ev3, optimal_battery_range= (0, 9)):
+    def __init__(self, left_motor : Motor, right_motor : Motor, axle_len : int, hub, optimal_battery_range= (0, 9)):
         self.left_motor = left_motor
         self.right_motor = right_motor
         self.axle_len = axle_len
@@ -84,7 +89,7 @@ class DriveBase:
         self.right_motor.lock()
         self.right_motor.reset_angle()
 
-        self.ev3 = ev3
+        self.hub = hub
         self.battery_range = optimal_battery_range
 
         self.battery_check(show= True)
@@ -96,20 +101,20 @@ class DriveBase:
         self.log_queue = []
 
     def battery_check(self, show= False):
-        self.battery_voltage = self.ev3.battery.voltage()
+        self.battery_voltage = self.hub.battery_voltage()
         self.battery_voltage = self.battery_voltage / (10**(len(str(self.battery_voltage))-1))
         show = False
         if self.battery_voltage < self.battery_range[0]:
             print("Battery under range!")
-            self.ev3.speaker.beep(frequency=500, duration=300)
-            wait(100)
-            self.ev3.speaker.beep(frequency=500, duration=300)
+            self.hub.sound.beep(500, 300, 75)
+            sleep_ms(100)
+            self.hub.sound.beep(500, 300, 75)
             show = True
         elif self.battery_voltage > self.battery_range[1]:
             print("Battery above range!")
-            self.ev3.speaker.beep(frequency=600, duration=300)
-            wait(100)
-            self.ev3.speaker.beep(frequency=600, duration=300)
+            self.hub.sound.beep(600, 300, 75)
+            sleep_ms(100)
+            self.hub.sound.beep(600, 300, 75)
             show = True     
 
         if show:
@@ -164,7 +169,7 @@ class DriveBase:
             self.left_motor.run_free(left_speed)
             self.right_motor.run_free(right_speed)
 
-            wait(5)
+            sleep_ms(5)
             angle_travelled = ((self.left_motor.motor.angle() - prev_left_angle) + (self.right_motor.motor.angle() - prev_right_angle)) / 2
 
         left_dist_travelled = (self.left_motor.motor.angle() - prev_left_angle) / 360 * self.left_motor.circ
@@ -201,7 +206,7 @@ class DriveBase:
             self.left_motor.run_free(left_speed)
             self.right_motor.run_free(right_speed)
 
-            wait(10)
+            sleep_ms(10)
 
     def set_follow_line(self, line_follower : LineFollower):
         self.line_follower = line_follower
@@ -349,24 +354,19 @@ class DriveBase:
         left_total_dist = self.left_motor.total_dist
         right_total_dist = self.right_motor.total_dist
 
-        screen = self.ev3.screen
+        screen = self.hub.screen
 
         previous_left_friction = self.left_motor.friction
         previous_right_friction = self.right_motor.friction
 
-        wait(1000)
+        sleep_ms(1000)
 
-        screen.clear()
-        screen.print("\n")
-        screen.set_font(big_font)
-        screen.print("Correct the robot")
 
         self.left_motor.free()
         self.right_motor.free()
 
-        wait_for_button(self.ev3)
+        wait_for_button(self.hub)
 
-        screen.clear()
 
         left_dist = self.left_motor.get_movement()
         right_dist = self.right_motor.get_movement()
@@ -380,26 +380,19 @@ class DriveBase:
         left_friction = round(self.left_motor.friction, 4)
         right_friction = round(self.right_motor.friction, 4)
 
-        screen.print("\n")
-        screen.set_font(big_font)
 
-        screen.print("Left over: " + str(left_dist*previous_left_friction))
         print("Left over: " + str(left_dist*previous_left_friction))
-        screen.print("Right over: " + str(right_dist*previous_right_friction))
         print("Right over: " + str(right_dist*previous_right_friction))
 
-        screen.print()
         print()
 
-        screen.print("Left friction: " + str(self.left_motor.friction))
         print("Left friction: " + str(self.left_motor.friction))
-        screen.print("Right friction: " + str(self.right_motor.friction))
         print("Right friction: " + str(self.right_motor.friction))
 
         self.left_motor.reset_angle()
         self.right_motor.reset_angle()
 
-        wait_for_button(self.ev3)
+        wait_for_button(self.hub)
         screen.clear()
 
         self.frictions[friction] = [self.left_motor.friction, self.right_motor.friction]
