@@ -55,7 +55,7 @@ class Motor:
 
     def actuate(self, travel, speed):
         angle = low_angle + ((self.angle_range / 100) * travel) - self.motor.angle()
-        self.motor.run_angle(speed, angle, wait= True, then= Stop.HOLD)
+        self._run_for_degrees(angle, speed, stop= HOLD)
 
     def _init_drive_motor(self, wheel_diameter, ratio):
         self.friction = 1
