@@ -13,6 +13,7 @@ from json import load, dump
 # TODO: Test ratios
 
 Drive = 0
+Actuator = 1
 
 Right = 1
 Left = -1
@@ -33,18 +34,37 @@ def black_lf_eval(target, port):
 class Motor:
     def __init__(self, motor_port, motor_type= Drive, wheel_diameter= 0, ratio= 1):
         self.port = motor_port
+
         self.type = motor_type
         self.log_mode = True
         self.total_dist = 0
 
         if self.type == Drive:
             self._init_drive_motor(wheel_diameter, ratio)
+        elif self.type == Actuator:
+            self._init_actuator_motor(low_angle, high_angle, ratio)
+
+    def _init_actuator_motor(self, low_angle, high_angle, ratio):
+        self.low_angle = low_angle
+        self.high_angle = high_angle
+        self.angle_range = high_angle - low_angle
+        self.ratio = ratio
+
+    def set_actuator(self, low_angle, high_angle, ratio):
+        _init_actuator_motor(low_angle, high_angle, ratio)
+
+    def actuate(self, travel, speed):
+        angle = low_angle + ((self.angle_range / 100) * travel) - self.motor.angle()
+        self.motor.run_angle(speed, angle, wait= True, then= Stop.HOLD)
 
     def _init_drive_motor(self, wheel_diameter, ratio):
         self.friction = 1
         self.diameter = wheel_diameter
         self.circ = math.pi * self.diameter
         self.ratio = ratio
+
+    def set_drive(self, wheel_diameter, ratio):
+        _init_drive_motor(wheel_diameter, ratio)
 
     def _run_for_deg(self, angle, speed, stop):
         spike_motor.run_for_degrees(self.port, angle, speed, stop= stop)
