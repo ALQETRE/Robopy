@@ -117,7 +117,6 @@ class DriveBase:
     def battery_check(self, show= False):
         self.battery_voltage = hub.battery_voltage()
         self.battery_voltage = self.battery_voltage / (10**(len(str(self.battery_voltage))-1))
-        show = False
         if self.battery_voltage < self.battery_range[0]:
             print("Battery under range!")
             sound.beep(500, 300, 75)
@@ -197,29 +196,60 @@ class DriveBase:
         if not line_follower is None:
             self.line_follower = prev_line_follower
 
-    def align(self, repeats, speed):
+    def align(self, repeats, line_follower= None):
+        prev_line_follower = None
+        if not line_follower is None:
+            prev_line_follower = self.line_follower
+            self.line_follower = line_follower
+
         sum_of_errors = 0
         prev_error = 0
 
+        prev_left_angle = self.left_motor.motor.angle()
+        prev_right_angle = self.right_motor.motor.angle()
+
         for i in range(repeats):
-            error = self.eval_function(self.target, self.sensor) * self.side
+            error = self.line_follower.eval_function(self.line_follower.target, self.line_follower.sensor) * self.line_follower.side
             sum_of_errors += error
 
-            propotional = error * self.Kp
-            integral = sum_of_errors * self.Ki
-            derivate = (error - prev_error) * self.Kd
+            if not self.line_follower.Kp is None:
+                propotional = error * self.line_follower.Kp
+            else:
+                propotional = 0
+
+            if not self.line_follower.Ki is None:
+                integral = sum_of_errors * self.line_follower.Ki
+            else:
+                integral = 0
+
+            if not self.line_follower.Kd is None:
+                derivate = (error - prev_error) * self.line_follower.Kd
+            else:
+                derivate = 0
 
             prev_error = error
 
             correction = propotional + integral + derivate
 
-            left_speed = correction + speed
-            right_speed = -correction - speed
+            left_speed = correction
+            right_speed = -correction
+
+            self.left_motor.run_free(left_speed)
+            self.right_motor.run_free(right_speed)
 
             self.left_motor.run_free(left_speed)
             self.right_motor.run_free(right_speed)
 
             sleep(0.01)
+
+        left_dist_travelled = (self.left_motor.motor.angle() - prev_left_angle) / 360 * self.left_motor.circ
+        right_dist_travelled = (self.right_motor.motor.angle() - prev_right_angle) / 360 * self.right_motor.circ
+
+        self.left_motor.total_dist += left_dist_travelled
+        self.right_motor.total_dist += right_dist_travelled
+
+        self.left_motor.lock()
+        self.right_motor.lock()
 
     def set_follow_line(self, line_follower : LineFollower):
         self.line_follower = line_follower
