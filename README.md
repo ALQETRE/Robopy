@@ -71,4 +71,35 @@ This method will follow a line based on a *robopy.LineFollower*, you can give it
 |--|--|--|
 | speed | float | The speed of the movement |
 | total_dist | float | The total distance it will cover in mm |
-| line_follower | robopy.LineFollower | A line follower object that will be used once |
+| line_follower | robopy.LineFollower | A line follower object that will be used only once |
+
+---
+
+#### set_follow_line(line_follower : LineFollower):
+
+| Name | Type | Desc |
+|--|--|--|
+| line_follower | robopy.LineFollower | Give it a *robopy.LineFollower* and it will set it as default |
+
+---
+
+#### align(repeats : int, line_follower : robopy.LineFollower = None):
+
+| Name | Type | Desc |
+|--|--|--|
+| repeats | int | Number of repeats to run follow_line |
+| line_follower | robopy.LineFollower | A line follower object that will be used only once |
+
+---
+
+#### move_until(speed : float, until_func : function, args : list = None):
+
+| Name | Type | Desc |
+|--|--|--|
+| speed | float | The speed of the movement |
+| until_func | function | Expects function that returns boll and will move until it gets True |
+| args | list | List of arguments for *until_func* |
+
+---
+
+#### turn_until(speed : float, until_func : function, radius : float = 0, direction : int = robopy.Right, args : list = None):
