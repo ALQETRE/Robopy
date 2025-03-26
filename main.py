@@ -2,8 +2,8 @@
 from spike import hub
 from spike import motor
 from spike import color_sensor
-from spike import time
 from hub import port
+from time import sleep
 
 import robopy as r
 
@@ -21,4 +21,4 @@ bot.set_friction("driving")
 # Code Segment
 
 print("End")
-time.sleep_ms(1000)
+sleep(1)

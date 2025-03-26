@@ -2,8 +2,8 @@
 from spike import hub
 from spike import motor as spike_motor
 from spike import color_sensor as spike_color_sensor
-from spike import time
-from hub import port
+from hub import port, button, sound
+from time import sleep
 
 
 import math
@@ -19,11 +19,9 @@ Right = 1
 Left = -1
 
 
-def wait_for_button(hub):
-    while not hub.button.pressed():
-        sleep_ms(10)
-    while hub.button.pressed():
-        sleep_ms(10)
+def wait_for_button():
+    while not (button.pressed(button.LEFT) or button.pressed(button.RIGHT)):
+        sleep(0.01)
 
 def black_lf_eval(target, port):
     reflection = spike_color_sensor.reflection(port)
@@ -66,9 +64,6 @@ class Motor:
     def set_drive(self, wheel_diameter, ratio):
         _init_drive_motor(wheel_diameter, ratio)
 
-    def _run_for_deg(self, angle, speed, stop):
-        spike_motor.run_for_degrees(self.port, angle, speed, stop= stop)
-
     def run(self, dist, speed, wait= False):
         angle = dist / self.circ * 360
         angle /= self.ratio
@@ -78,9 +73,9 @@ class Motor:
             self.total_dist += dist
 
         if wait:
-            self._run_for_degrees(angle, speed, stop= HOLD)
+            await spike_motor.run_for_degrees(self.port, angle, speed, stop= spike_motor.HOLD)
         else:
-            threading.Thread(target= self._run_for_deg, args= (angle, speed, spike_motor.HOLD)).start()
+            spike_motor.run_for_degrees(self.port, angle, speed, stop= spike_motor.HOLD)
 
     def run_free(self, speed):
         spike_motor.run(self.port, speed)
@@ -99,7 +94,7 @@ class Motor:
         return spike_motor.relative_position(self.port) * self.circ / 360 * self.ratio / self.friction
 
 class DriveBase:
-    def __init__(self, left_motor : Motor, right_motor : Motor, axle_len : int, hub, optimal_battery_range= (0, 9)):
+    def __init__(self, left_motor : Motor, right_motor : Motor, axle_len : int, optimal_battery_range= (0, 9)):
         self.left_motor = left_motor
         self.right_motor = right_motor
         self.axle_len = axle_len
@@ -108,8 +103,7 @@ class DriveBase:
         self.left_motor.reset_angle()
         self.right_motor.lock()
         self.right_motor.reset_angle()
-
-        self.hub = hub
+        
         self.battery_range = optimal_battery_range
 
         self.battery_check(show= True)
@@ -121,20 +115,20 @@ class DriveBase:
         self.log_queue = []
 
     def battery_check(self, show= False):
-        self.battery_voltage = self.hub.battery_voltage()
+        self.battery_voltage = hub.battery_voltage()
         self.battery_voltage = self.battery_voltage / (10**(len(str(self.battery_voltage))-1))
         show = False
         if self.battery_voltage < self.battery_range[0]:
             print("Battery under range!")
-            self.hub.sound.beep(500, 300, 75)
-            sleep_ms(100)
-            self.hub.sound.beep(500, 300, 75)
+            sound.beep(500, 300, 75)
+            sleep(0.1)
+            sound.beep(500, 300, 75)
             show = True
         elif self.battery_voltage > self.battery_range[1]:
             print("Battery above range!")
-            self.hub.sound.beep(600, 300, 75)
-            sleep_ms(100)
-            self.hub.sound.beep(600, 300, 75)
+            sound.beep(600, 300, 75)
+            sleep(0.1)
+            sound.beep(600, 300, 75)
             show = True     
 
         if show:
@@ -189,7 +183,6 @@ class DriveBase:
             self.left_motor.run_free(left_speed)
             self.right_motor.run_free(right_speed)
 
-            sleep_ms(5)
             angle_travelled = ((self.left_motor.motor.angle() - prev_left_angle) + (self.right_motor.motor.angle() - prev_right_angle)) / 2
 
         left_dist_travelled = (self.left_motor.motor.angle() - prev_left_angle) / 360 * self.left_motor.circ
@@ -226,7 +219,7 @@ class DriveBase:
             self.left_motor.run_free(left_speed)
             self.right_motor.run_free(right_speed)
 
-            sleep_ms(10)
+            sleep(0.01)
 
     def set_follow_line(self, line_follower : LineFollower):
         self.line_follower = line_follower
@@ -374,18 +367,16 @@ class DriveBase:
         left_total_dist = self.left_motor.total_dist
         right_total_dist = self.right_motor.total_dist
 
-        screen = self.hub.screen
-
         previous_left_friction = self.left_motor.friction
         previous_right_friction = self.right_motor.friction
 
-        sleep_ms(1000)
+        sleep(1)
 
 
         self.left_motor.free()
         self.right_motor.free()
 
-        wait_for_button(self.hub)
+        wait_for_button()
 
 
         left_dist = self.left_motor.get_movement()
@@ -412,8 +403,7 @@ class DriveBase:
         self.left_motor.reset_angle()
         self.right_motor.reset_angle()
 
-        wait_for_button(self.hub)
-        screen.clear()
+        wait_for_button()
 
         self.frictions[friction] = [self.left_motor.friction, self.right_motor.friction]
 
