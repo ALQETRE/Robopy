@@ -241,10 +241,35 @@ Return's the total distance traveld
 
 | Name | Type | Desc |
 |--|--|--|
-| eval_function | function | Function that returns float between -something and +something *follow_line()* will try to make it *target* |
+| eval_function | function | Function that returns float between a negative and positive number *follow_line()* will try to make it *target* |
 | sensor | pybricks.ev3devices.*sensor_type* | Sensor used for evaluating, it gets passed as a seceond parameter into eval_func |
 | target | float | Target used for evaluating, it gets passed as a first parameter into eval_func |
 | side | robopy.Left/Right | On what side of the line it should follow |
 | Kp | float | Kp adjusts output based on the current error |
 | Ki | float | Ki adjusts output based on past errors (Advanced) |
 | Kd | float | Kd adjusts output based on the rate of error change |
+
+---
+
+## no class:
+
+#### wait_for_button(ev3):
+
+##### Description:
+Waits on a button press and realese
+
+| Name | Type | Desc |
+|--|--|--|
+| ev3 | pybricks.hubs.EV3Brick() | EV3 Brick object |
+
+---
+
+#### black_lf_eval(target, sensor):
+
+##### Description:
+Built-in line following evaluation function for following reflection of a color sensor
+
+| Name | Type | Desc |
+|--|--|--|
+| target | float | The target for line following (lf) |
+| sensor | float | The sensor for line following (lf) |
